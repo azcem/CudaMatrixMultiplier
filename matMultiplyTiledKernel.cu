@@ -21,7 +21,7 @@ __global__ void matMultiplyTiledKernel(float *A, float *B, float *P, int j,
   __shared__ float Bdx[TILE_WIDTH][TILE_WIDTH];
   // loop over phases
   float pValue = 0;
-  for (int ph = 0; ph < ceil(max(j, l) / (float)TILE_WIDTH); ++ph) {
+  for (int ph = 0; ph < ceil(k / (float)TILE_WIDTH); ++ph) {
     // for each phase load one element from A and B
     if ((row < j) && (ph * TILE_WIDTH + tx) < k)
       Adx[ty][tx] = A[row * k + ph * TILE_WIDTH + tx];

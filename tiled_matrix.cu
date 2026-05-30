@@ -83,8 +83,7 @@ int main(int argc, char **argv) {
   cudaEventCreate(&stop_t);
 
   dim3 bd(TILE_WIDTH, TILE_WIDTH, 1);
-  dim3 gd(ceil(max(j, l) / (float)TILE_WIDTH),
-          ceil(max(j, l) / (float)TILE_WIDTH), 1);
+  dim3 gd(ceil(l / (float)TILE_WIDTH), ceil(j / (float)TILE_WIDTH), 1);
 
   cudaEventRecord(start_t);
   for (int n = 0; n < N_ITER; n++)
@@ -115,8 +114,8 @@ int main(int argc, char **argv) {
   cudaEventRecord(start_c);
 
   for (int n = 0; n < N_ITER; n++)
-    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, j, l, k, &alpha, A_d, j, B_d,
-                k, &beta, out_d, j);
+    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, l, j, k, &alpha, B_d, l, A_d,
+                k, &beta, out_d, l);
 
   error = cudaGetLastError();
   if (error != cudaSuccess) {
