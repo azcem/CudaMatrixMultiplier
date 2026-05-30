@@ -1,6 +1,5 @@
 #pragma once
 #include "parameters.h"
-#include <stdio.h>
 
 /* GPU kernel to perform tiled matrix multiplication */
 // j -> height of A or height of P
