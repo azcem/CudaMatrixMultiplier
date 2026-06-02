@@ -69,7 +69,7 @@ mm_tiled_kernel<<<gridDim, blockDim>>>(A_d, B_d, C_d, M, N, K);
 ## Build & Run
  
 ```bash
-nvcc tiled_matrix.cu -o tiled_matrix
+nvcc tiled_matrix.cu -o tiled_matrix -lcublas
 ./tiled_matrix 4096 4096 4096      # M N K
 ```
 
