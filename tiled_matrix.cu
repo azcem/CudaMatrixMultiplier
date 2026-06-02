@@ -1,4 +1,5 @@
 #include "matMultiplyTiledKernel.cu"
+#include "mm_tiled_kernel.cu"
 #include "parameters.h"
 #include <cmath>
 #include <cstdio>
@@ -86,8 +87,8 @@ int main(int argc, char **argv) {
   dim3 gd(ceil(l / (float)TILE_WIDTH), ceil(j / (float)TILE_WIDTH), 1);
 
   cudaEventRecord(start_t);
-  for (int n = 0; n < N_ITER; n++)
-    matMultiplyTiledKernel<<<gd, bd>>>(A_d, B_d, out_d, j, k, l);
+  // for (int n = 0; n < N_ITER; n++)
+  matMultiplyTiledKernel<<<gd, bd>>>(A_d, B_d, out_d, j, k, l);
   cudaError_t error = cudaGetLastError();
   if (error != cudaSuccess) {
     printf("CUDA Error: %s\n", cudaGetErrorString(error));
@@ -98,8 +99,22 @@ int main(int argc, char **argv) {
   float milliseconds = 0;
   cudaEventElapsedTime(&milliseconds, start_t, stop_t);
   printf("time taken in GPU (tiled): %f seconds\n", milliseconds / 1000.0);
-  cudaMemcpy(out_tiled, out_d, j * l * sizeof(float), cudaMemcpyDeviceToHost);
+  // cudaMemcpy(out_tiled, out_d, j * l * sizeof(float),
+  // cudaMemcpyDeviceToHost);
   /* TILED GPU EXECUTION END */
+
+  /* TILED GPU OPTIMIZED CALL */
+  dim3 bd1(NUM_THREADS_PER_BLOCK);
+  // dim3 gd1(ceil(l / (float)bN), ceil(j / (float)bM));
+  dim3 gd1((l + bN - 1) / bN, (j + bM - 1) / bM);
+  mm_tiled_kernel<<<gd1, bd1>>>(A_d, B_d, out_d, j, l, k);
+  error = cudaGetLastError();
+  if (error != cudaSuccess) {
+    printf("CUDA Error: %s\n", cudaGetErrorString(error));
+    return 1;
+  }
+  cudaMemcpy(out_tiled, out_d, j * l * sizeof(float), cudaMemcpyDeviceToHost);
+  /* TILED GPU OPTIMIZED END */
 
   /* CUBLAS START */
   cublasHandle_t handle;
@@ -113,9 +128,9 @@ int main(int argc, char **argv) {
   cudaEventCreate(&stop_c);
   cudaEventRecord(start_c);
 
-  for (int n = 0; n < N_ITER; n++)
-    cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, l, j, k, &alpha, B_d, l, A_d,
-                k, &beta, out_d, l);
+  // for (int n = 0; n < N_ITER; n++)
+  cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, l, j, k, &alpha, B_d, l, A_d, k,
+              &beta, out_d, l);
 
   error = cudaGetLastError();
   if (error != cudaSuccess) {
