@@ -54,13 +54,13 @@ Memory latency from global → shared loads can be hidden by overlapping the loa
 #define tN   8    // thread tile cols
  
 // derived
-#define NUM_THREADS ((bM/tM) * (bN/tN))   // 256
+#define NUM_THREADS_PER_BLOCK ((bM/tM) * (bN/tN))   // 256
 ```
  
 **Launch:**
  
 ```cpp
-dim3 blockDim(NUM_THREADS, 1, 1);
+dim3 blockDim(NUM_THREADS_PER_BLOCK, 1, 1);
 dim3 gridDim((N + bN - 1) / bN, (M + bM - 1) / bM, 1);
  
 mm_tiled_kernel<<<gridDim, blockDim>>>(A_d, B_d, C_d, M, N, K);
@@ -70,7 +70,7 @@ mm_tiled_kernel<<<gridDim, blockDim>>>(A_d, B_d, C_d, M, N, K);
  
 ```bash
 nvcc tiled_matrix.cu -o tiled_matrix -lcublas
-./tiled_matrix 4096 4096 4096      # M N K
+./tiled_matrix 4096 4096 4096      # M K N
 ```
 
 ## References
