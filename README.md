@@ -42,7 +42,7 @@ __shared__ float B_s[bK][bN];
 
 ### 4. Software Pipelining (Double Buffering)
  
-Memory latency from global → shared loads can be hidden by overlapping the load for the *next* tile with computation on the *current* tile. Two shared memory buffers are allocated and swapped each iteration:
+Memory latency from global → shared loads can be hidden by overlapping the load for the *next* tile with computation on the *current* tile. Two shared memory buffers are allocated and swapped each iteration.
 
 ## Kernel Configuration
  
