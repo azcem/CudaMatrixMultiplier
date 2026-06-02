@@ -77,38 +77,12 @@ int main(int argc, char **argv) {
   cudaMemcpy(A_d, A, j * k * sizeof(float), cudaMemcpyHostToDevice);
   cudaMemcpy(B_d, B, k * l * sizeof(float), cudaMemcpyHostToDevice);
 
-  // call tiled matrix kernel
-  /* TILED MATRIX KERNEL EXECUTION */
-  cudaEvent_t start_t, stop_t;
-  cudaEventCreate(&start_t);
-  cudaEventCreate(&stop_t);
-
-  dim3 bd(TILE_WIDTH, TILE_WIDTH, 1);
-  dim3 gd(ceil(l / (float)TILE_WIDTH), ceil(j / (float)TILE_WIDTH), 1);
-
-  cudaEventRecord(start_t);
-  // for (int n = 0; n < N_ITER; n++)
-  matMultiplyTiledKernel<<<gd, bd>>>(A_d, B_d, out_d, j, k, l);
-  cudaError_t error = cudaGetLastError();
-  if (error != cudaSuccess) {
-    printf("CUDA Error: %s\n", cudaGetErrorString(error));
-    return 1;
-  }
-  cudaEventRecord(stop_t);
-  cudaEventSynchronize(stop_t);
-  float milliseconds = 0;
-  cudaEventElapsedTime(&milliseconds, start_t, stop_t);
-  printf("time taken in GPU (tiled): %f seconds\n", milliseconds / 1000.0);
-  // cudaMemcpy(out_tiled, out_d, j * l * sizeof(float),
-  // cudaMemcpyDeviceToHost);
-  /* TILED GPU EXECUTION END */
-
   /* TILED GPU OPTIMIZED CALL */
-  dim3 bd1(NUM_THREADS_PER_BLOCK);
+  dim3 bd(NUM_THREADS_PER_BLOCK);
   // dim3 gd1(ceil(l / (float)bN), ceil(j / (float)bM));
-  dim3 gd1((l + bN - 1) / bN, (j + bM - 1) / bM);
-  mm_tiled_kernel<<<gd1, bd1>>>(A_d, B_d, out_d, j, l, k);
-  error = cudaGetLastError();
+  dim3 gd((l + bN - 1) / bN, (j + bM - 1) / bM);
+  mm_tiled_kernel<<<gd, bd>>>(A_d, B_d, out_d, j, l, k);
+  cudaError_t error = cudaGetLastError();
   if (error != cudaSuccess) {
     printf("CUDA Error: %s\n", cudaGetErrorString(error));
     return 1;
@@ -123,11 +97,6 @@ int main(int argc, char **argv) {
   float alpha = 1.0f;
   float beta = 0.0f;
 
-  cudaEvent_t start_c, stop_c;
-  cudaEventCreate(&start_c);
-  cudaEventCreate(&stop_c);
-  cudaEventRecord(start_c);
-
   // for (int n = 0; n < N_ITER; n++)
   cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, l, j, k, &alpha, B_d, l, A_d, k,
               &beta, out_d, l);
@@ -137,11 +106,6 @@ int main(int argc, char **argv) {
     printf("CUDA Error: %s\n", cudaGetErrorString(error));
     return 1;
   }
-  cudaEventRecord(stop_c);
-  cudaEventSynchronize(stop_c);
-  milliseconds = 0;
-  cudaEventElapsedTime(&milliseconds, start_c, stop_c);
-  printf("time taken in GPU (CUBLAS): %f seconds\n", milliseconds / 1000.0);
   cudaMemcpy(out_cublas, out_d, j * l * sizeof(float), cudaMemcpyDeviceToHost);
   /* CUBLAS END */
 
