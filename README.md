@@ -14,17 +14,32 @@ Each thread computes a `tM × tN` output tile rather than a single element. This
 Rather than re-indexing into shared memory on every inner-loop iteration, each thread caches its row of `A_s` and column of `B_s` into private register arrays before the dot product:
  
 ```cuda
-float a_reg[tM];   // cache tM elements from A_s row
-float b_reg[tN];   // cache tN elements from B_s col
- 
-for (int i = 0; i < bK; ++i) {
-    for (int m = 0; m < tM; ++m) a_reg[m] = A_s[(tRow+m)*bK + i];
-    for (int n = 0; n < tN; ++n) b_reg[n] = B_s[i*bN + tCol+n];
- 
-    for (int m = 0; m < tM; ++m)
-        for (int n = 0; n < tN; ++n)
-            C_reg[m][n] += a_reg[m] * b_reg[n];
-}
+float a_r[tM];
+float b_r[tN];
+#pragma unroll
+  for (unsigned int i = 0; i < k; ++i) {
+
+// load A strip to registers
+#pragma unroll
+    for (unsigned int row = 0; row < m; ++row) {
+      a_r[row] = a[row * lda + i];
+    }
+
+// load B strip to registers
+#pragma unroll
+    for (unsigned int col = 0; col < n; ++col) {
+      b_r[col] = b[i * ldb + col];
+    }
+
+// compute with strips
+#pragma unroll
+    for (unsigned int row = 0; row < m; ++row) {
+#pragma unroll
+      for (unsigned int col = 0; col < n; ++col) {
+        c[row][col] += a_r[row] * b_r[col];
+      }
+    }
+  }
 ```
 
 ### 3. Bank Conflict Elimination
@@ -36,13 +51,42 @@ A 32-bank shared memory architecture causes bank conflicts when multiple threads
 **Fix:** pad the inner dimension of `A_s` by 1:
  
 ```cuda
-__shared__ float A_s[bM][bK + 1];  // +1 padding eliminates bank conflicts
-__shared__ float B_s[bK][bN];
+  __shared__ float Acurr_ss[bM * (bK + 1)]; // +1 padding eliminates bank conflicts
 ```
 
 ### 4. Software Pipelining (Double Buffering)
  
 Memory latency from global → shared loads can be hidden by overlapping the load for the *next* tile with computation on the *current* tile. Two shared memory buffers are allocated and swapped each iteration.
+
+```cuda
+  // pre-feth first iteration tiles to shared memory
+  loadTile(&A[bRow * K], K, M - bRow, K, &Acurr_s[0], bK + 1, bM, bK);
+  loadTile(&B[bCol], N, K, N - bCol, &Bcurr_s[0], bN, bK, bN);
+  __syncthreads();
+  // condition is int-safe ceil of K/Bk
+  for (unsigned int tile = 1; tile < (K + bK - 1) / bK; ++tile) {
+
+    // compute with current iteration shared memory tiles
+    mm(tM, tN, bK, &Acurr_s[tRow * (bK + 1)], bK + 1, &Bcurr_s[tCol], bN, C_r);
+
+    // prefetch next iteration tiles to shared memory
+    loadTile(&A[bRow * K + tile * bK], K, M - bRow, K - tile * bK, &Anext_s[0],
+             bK + 1, bM, bK);
+    loadTile(&B[tile * bK * N + bCol], N, K - tile * bK, N - bCol, &Bnext_s[0],
+             bN, bK, bN);
+    __syncthreads();
+
+    // swap double buffers
+    float *Atmp_s = Acurr_s;
+    Acurr_s = Anext_s;
+    Anext_s = Atmp_s;
+    float *Btmp_s = Bcurr_s;
+    Bcurr_s = Bnext_s;
+    Bnext_s = Btmp_s;
+  }
+  // compute with last iteration shared memory tile
+  mm(tM, tN, bK, &Acurr_s[tRow * (bK + 1)], bK + 1, &Bcurr_s[tCol], bN, C_r);
+```
 
 ## Kernel Configuration
  
